@@ -19,7 +19,7 @@ func Init(testing bool) controllers.Server {
 	cfg = config.New()
 
 	err := server.Init(
-		cfg.SQLFilePath(),
+		cfg,
 	)
 
 	if err != nil {

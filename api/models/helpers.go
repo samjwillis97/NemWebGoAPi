@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 )
@@ -175,4 +176,14 @@ func ParseFilterMap(filterMap map[string][]string, dest interface{}) {
 		}
 	}
 
+}
+
+func getFloatReflectOnly(unk interface{}) (float64, error) {
+	v := reflect.ValueOf(unk)
+	v = reflect.Indirect(v)
+	if !v.Type().ConvertibleTo(reflect.TypeOf(float64(0))) {
+		return math.NaN(), fmt.Errorf("cannot convert %v to float64", v.Type())
+	}
+	fv := v.Convert(reflect.TypeOf(float64(0)))
+	return fv.Float(), nil
 }

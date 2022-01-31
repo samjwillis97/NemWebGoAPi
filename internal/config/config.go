@@ -107,3 +107,19 @@ func (c *Config) SQLFilePath() string {
 func (c *Config) Port() string {
 	return c.apiPort
 }
+
+func (c *Config) InfluxHost() string {
+	return c.influxURL
+}
+
+func (c *Config) InfluxToken() string {
+	return c.influxToken
+}
+
+func (c *Config) InfluxBucket() string {
+	return c.influxBucket
+}
+
+func (c *Config) InfluxOrg() string {
+	return c.influxOrg
+}

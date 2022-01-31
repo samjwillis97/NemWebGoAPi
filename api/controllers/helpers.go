@@ -33,5 +33,3 @@ func (s *Server) decode(w http.ResponseWriter, r *http.Request, v interface{}) e
 		}
 	}
 }
-
-// r.URL.Query().Get("limit")

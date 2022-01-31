@@ -4,21 +4,28 @@ import (
 	"database/sql"
 	"net/http"
 
+	"NemWebGoApi/internal/config"
+	"NemWebGoApi/internal/influxdb"
 	"NemWebGoApi/internal/sqlite"
 
 	"github.com/gorilla/mux"
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/rs/cors"
 	log "github.com/sirupsen/logrus"
 )
 
 type Server struct {
-	SQLDb  *sql.DB
-	Router *mux.Router
+	SQLDb    *sql.DB
+	InfluxDB influxdb2.Client
+	Router   *mux.Router
+	Config   *config.Config
 }
 
-func (s *Server) Init(SQLFilePath string) error {
-	s.SQLDb = sqlite.New(SQLFilePath)
+func (s *Server) Init(cfg *config.Config) error {
+	s.SQLDb = sqlite.New(cfg.SQLFilePath())
+	s.InfluxDB = influxdb.New(cfg.InfluxHost(), cfg.InfluxToken())
 	s.Router = mux.NewRouter()
+	s.Config = cfg
 	s.initializeRoutes()
 	return nil
 }
