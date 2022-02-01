@@ -26,11 +26,16 @@ type IntFilter struct {
 }
 
 func (f *StringFilter) fromFilterMap(filterMap map[string][]string, param string) {
+	if val, ok := filterMap[param+".eq"]; ok {
+		f.eq = val
+	}
 	if val, ok := filterMap[param+".li"]; ok {
 		f.li = val
 	}
-	if val, ok := filterMap[param+".eq"]; ok {
-		f.eq = val
+	if len(f.eq) == 0 && len(f.li) == 0 {
+		if val, ok := filterMap[param]; ok {
+			f.eq = val
+		}
 	}
 }
 
@@ -52,7 +57,7 @@ func (f *IntFilter) fromFilterMap(filterMap map[string][]string, param string) {
 	}
 }
 
-func buildStringFilterQuery(filter StringFilter, colName string) (string, bool) {
+func buildStringFilterSQLStatement(filter StringFilter, colName string) (string, bool) {
 	stmt := "("
 	if len(filter.eq) != 0 {
 		for ndx, val := range filter.eq {
@@ -78,7 +83,34 @@ func buildStringFilterQuery(filter StringFilter, colName string) (string, bool) 
 	return stmt, true
 }
 
-func buildInt64FilterQuery(filter IntFilter, colName string) (string, bool) {
+func buildStringFilterFluxStatement(filter StringFilter, fieldName string) (string, bool) {
+	base := "\n\t|> filter(fn: (r) => "
+	stmt := base
+	if len(filter.eq) != 0 {
+		for ndx, val := range filter.eq {
+			stmt += fmt.Sprintf("\n\t\tr.%s == \"%s\"", fieldName, val)
+			if ndx < len(filter.li)-1 {
+				stmt += "and"
+			}
+		}
+		stmt += "\n\t)"
+	} else if len(filter.li) != 0 {
+		for ndx, val := range filter.li {
+			stmt += fmt.Sprintf("\n\t\tr.%s =~ \"/%s/\"", fieldName, val)
+			if ndx < len(filter.li)-1 {
+				stmt += "and"
+			}
+		}
+		stmt += "\n\t)"
+	}
+
+	if stmt == base {
+		return "", false
+	}
+	return stmt, true
+}
+
+func buildInt64FilterSQLStatement(filter IntFilter, colName string) (string, bool) {
 	stmt := "("
 	if filter.eq != -1 {
 		stmt += fmt.Sprintf("%s = %d", colName, filter.eq)
@@ -103,10 +135,10 @@ func buildInt64FilterQuery(filter IntFilter, colName string) (string, bool) {
 	return stmt, true
 }
 
-// buildFilterQuery takes a struct that consists of filters like StringFilter and IntFilter
+// buildSQLQuery takes a struct that consists of filters like StringFilter and IntFilter
 // It then generates the SQL query to apply these filters
 // requires the struct fields have a tag of "col" to be able to generate query effectively
-func buildFilterQuery(filter interface{}) string {
+func buildSQLQuery(filter interface{}) string {
 	var stmt string
 	filterArr := make([]string, 0)
 
@@ -124,12 +156,12 @@ func buildFilterQuery(filter interface{}) string {
 		switch reflect.TypeOf(filter).Field(i).Type {
 		case reflect.TypeOf(StringFilter{}):
 			concreteVal, _ := fieldVal.Interface().(StringFilter)
-			if val, ok := buildStringFilterQuery(concreteVal, col); ok {
+			if val, ok := buildStringFilterSQLStatement(concreteVal, col); ok {
 				filterArr = append(filterArr, val)
 			}
 		case reflect.TypeOf(IntFilter{}):
 			concreteVal, _ := fieldVal.Interface().(IntFilter)
-			if val, ok := buildInt64FilterQuery(concreteVal, col); ok {
+			if val, ok := buildInt64FilterSQLStatement(concreteVal, col); ok {
 				filterArr = append(filterArr, val)
 			}
 		}
@@ -147,6 +179,41 @@ func buildFilterQuery(filter interface{}) string {
 		}
 		stmt += val
 	}
+	return stmt
+}
+
+func buildFluxQuery(filter interface{}) string {
+	var stmt string
+	filterArr := make([]string, 0)
+
+	v := reflect.Indirect(reflect.ValueOf(filter))
+	t := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		fieldVal := v.Field(i)
+		col := t.Field(i).Tag.Get("col")
+
+		if col == "" {
+			continue
+		}
+
+		switch reflect.TypeOf(filter).Field(i).Type {
+		case reflect.TypeOf(StringFilter{}):
+			concreteVal, _ := fieldVal.Interface().(StringFilter)
+			if val, ok := buildStringFilterFluxStatement(concreteVal, col); ok {
+				filterArr = append(filterArr, val)
+			}
+		}
+	}
+
+	if len(filterArr) == 0 {
+		return ""
+	}
+
+	for _, val := range filterArr {
+		stmt += "\n" + val
+	}
+
 	return stmt
 }
 

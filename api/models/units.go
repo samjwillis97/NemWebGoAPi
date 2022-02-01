@@ -27,7 +27,7 @@ type UnitFilter struct {
 // ReadAll returns all units in the database
 func (u *Unit) ReadAll(db *sql.DB, filter UnitFilter) (*[]Unit, error) {
 	query := "SELECT duid, station_name, region_id, fuel_source, technology_type, max_capacity FROM units"
-	query += buildFilterQuery(filter)
+	query += buildSQLQuery(filter)
 	results, err := db.Query(query)
 	if err != nil {
 		return &[]Unit{}, fmt.Errorf("models.unit.readall: query error: %v", err)

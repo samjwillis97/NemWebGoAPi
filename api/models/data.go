@@ -22,13 +22,18 @@ type DemandDataPoint struct {
 	Value    float64   `json:"value"`
 }
 
+type DemandFilter struct {
+	RegionID StringFilter `col:"regionId"`
+}
+
 // Filters include
 // [] of regions
 // start string
 // stop string
 // aggregate (every + fn)
 
-func ReadDemandData(db api.QueryAPI, bucket string) ([]DemandDataPoint, error) {
+func ReadDemandData(db api.QueryAPI, bucket string, filter DemandFilter) ([]DemandDataPoint, error) {
+	fmt.Println(buildFluxQuery(filter))
 	points := make([]DemandDataPoint, 0)
 
 	fluxQuery := fmt.Sprintf(`
@@ -59,4 +64,13 @@ func ReadDemandData(db api.QueryAPI, bucket string) ([]DemandDataPoint, error) {
 	}
 
 	return points, nil
+}
+
+func FilterMaptoDemandFilter(filterMap map[string][]string) DemandFilter {
+	var filter DemandFilter
+	fmt.Println(filterMap)
+
+	filter.RegionID.fromFilterMap(filterMap, "region_id")
+
+	return filter
 }
