@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"regexp"
 	"strconv"
 )
 
-// StringFilter is a type used to filter with strings in an SQL Query
+// StringFilter is a type used to filter with strings in an SQL or Flux Query
 // li is for LIKE
 // eq is for EQUAL
 type StringFilter struct {
@@ -15,7 +16,7 @@ type StringFilter struct {
 	eq []string
 }
 
-// IntFilter is a type used to filter numbers in an SQL Query
+// IntFilter is a type used to filter numbers in an SQL or Flux Query
 // lt is for LESS THAN
 // gt is for GREATER THAN
 // eq if for EQUALS
@@ -23,6 +24,57 @@ type IntFilter struct {
 	lt int64
 	gt int64
 	eq int64
+}
+
+// RangeFilter is a type used to filter a Flux Query by Time
+type RangeFilter struct {
+	start string
+	stop  string
+}
+
+// AggregateFilter is a type used to control how InfluxDB data is processed
+// every - the window period (time), only takes a single value
+// fn - the aggregation function, only takes a single value
+// See: https://docs.influxdata.com/flux/v0.x/stdlib/universe/aggregatewindow/
+type AggregateFilter struct {
+	every string // the window period
+	fn    string // aggreate function (mean)
+}
+
+// See: https://docs.influxdata.com/flux/v0.x/function-types/#aggregates
+// And: https://docs.influxdata.com/flux/v0.x/function-types/#selectors
+var aggregateFunctions = []string{
+	"mean",
+	"count",
+	"integral",
+	"mean",
+	"median",
+	"mode",
+	"quantile",
+	"reduce",
+	"skew",
+	"spread",
+	"stddev",
+	"sum",
+	"timeWeightedAvg",
+	"bottom",
+	"distinct",
+	"first",
+	"highestAverage",
+	"highestCurrent",
+	"highestMax",
+	"last",
+	"limit",
+	"lowestAverage",
+	"lowestCurrent",
+	"lowestMin",
+	"max",
+	"median",
+	"min",
+	"quantile",
+	"sample",
+	"top",
+	"unique",
 }
 
 func (f *StringFilter) fromFilterMap(filterMap map[string][]string, param string) {
@@ -57,6 +109,27 @@ func (f *IntFilter) fromFilterMap(filterMap map[string][]string, param string) {
 	}
 }
 
+func (f *AggregateFilter) fromFilterMap(filterMap map[string][]string, param string) {
+	if val, ok := filterMap[param+".every"]; ok {
+		f.every = val[0]
+	}
+	if val, ok := filterMap[param+".fn"]; ok {
+		f.fn = val[0]
+	}
+}
+
+func (f *RangeFilter) fromFilterMap(filterMap map[string][]string, param string) {
+	if val, ok := filterMap[param+".start"]; ok {
+		f.start = val[0]
+	} else {
+		f.start = "-7d" // Default
+	}
+	if val, ok := filterMap[param+".stop"]; ok {
+		f.stop = val[0]
+	}
+}
+
+// TODO: Sanitize
 func buildStringFilterSQLStatement(filter StringFilter, colName string) (string, bool) {
 	stmt := "("
 	if len(filter.eq) != 0 {
@@ -84,7 +157,7 @@ func buildStringFilterSQLStatement(filter StringFilter, colName string) (string,
 }
 
 func buildStringFilterFluxStatement(filter StringFilter, fieldName string) (string, bool) {
-	base := "\n\t|> filter(fn: (r) => "
+	base := "\t|> filter(fn: (r) => "
 	stmt := base
 	if len(filter.eq) != 0 {
 		for ndx, val := range filter.eq {
@@ -96,7 +169,7 @@ func buildStringFilterFluxStatement(filter StringFilter, fieldName string) (stri
 		stmt += "\n\t)"
 	} else if len(filter.li) != 0 {
 		for ndx, val := range filter.li {
-			stmt += fmt.Sprintf("\n\t\tr.%s =~ \"/%s/\"", fieldName, val)
+			stmt += fmt.Sprintf("\n\t\tr.%s =~ /%s/", fieldName, val)
 			if ndx < len(filter.li)-1 {
 				stmt += "and"
 			}
@@ -133,6 +206,43 @@ func buildInt64FilterSQLStatement(filter IntFilter, colName string) (string, boo
 		return "", false
 	}
 	return stmt, true
+}
+
+func buildAggregateFilterFluxStatement(filter AggregateFilter) (string, bool) {
+	// https://docs.influxdata.com/flux/v0.x/stdlib/universe/aggregatewindow/
+	// |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
+	everyValid, fnValid := false, false
+	for _, v := range aggregateFunctions {
+		if v == filter.fn {
+			fnValid = true
+			break
+		}
+	}
+
+	// https://docs.influxdata.com/flux/v0.x/spec/types/#duration-types
+	everyValid, _ = regexp.MatchString("^((\\d+)(ns|us|ms|s|m|h|d|w|mo|y))+$", filter.every)
+
+	if !everyValid || !fnValid {
+		return "", false
+	}
+
+	stmt := fmt.Sprintf("\t|> aggregateWindow(every: %s, fn: %s, createEmpty: false)", filter.every, filter.fn)
+	return stmt, true
+}
+
+func buildRangeFilterFluxStatement(filter RangeFilter) (string, bool) {
+	// Check Duration
+	if !validFluxDuration(filter.start) &&
+		!validISOTime(filter.start) &&
+		!validUnixTime(filter.start) {
+		return "\t|> range(start: -7d)", true
+	}
+	if !validFluxDuration(filter.stop) &&
+		!validISOTime(filter.stop) &&
+		!validUnixTime(filter.stop) {
+		return fmt.Sprintf("\t|> range(start: %s)", filter.start), true
+	}
+	return fmt.Sprintf("\t|> range(start: %s, stop: %s)", filter.start, filter.stop), true
 }
 
 // buildSQLQuery takes a struct that consists of filters like StringFilter and IntFilter
@@ -203,6 +313,16 @@ func buildFluxQuery(filter interface{}) string {
 			if val, ok := buildStringFilterFluxStatement(concreteVal, col); ok {
 				filterArr = append(filterArr, val)
 			}
+		case reflect.TypeOf(AggregateFilter{}):
+			concreteVal, _ := fieldVal.Interface().(AggregateFilter)
+			if val, ok := buildAggregateFilterFluxStatement(concreteVal); ok {
+				filterArr = append(filterArr, val)
+			}
+		case reflect.TypeOf(RangeFilter{}):
+			concreteVal, _ := fieldVal.Interface().(RangeFilter)
+			if val, ok := buildRangeFilterFluxStatement(concreteVal); ok {
+				filterArr = append(filterArr, val)
+			}
 		}
 	}
 
@@ -242,7 +362,6 @@ func ParseFilterMap(filterMap map[string][]string, dest interface{}) {
 
 		}
 	}
-
 }
 
 func getFloatReflectOnly(unk interface{}) (float64, error) {
@@ -253,4 +372,28 @@ func getFloatReflectOnly(unk interface{}) (float64, error) {
 	}
 	fv := v.Convert(reflect.TypeOf(float64(0)))
 	return fv.Float(), nil
+}
+
+func validFluxDuration(s string) bool {
+	v, err := regexp.MatchString("^(-|)((\\d+)(ns|us|ms|s|m|h|d|w|mo|y))+$", s)
+	if err != nil {
+		return false
+	}
+	return v
+}
+
+func validISOTime(s string) bool {
+	v, err := regexp.MatchString("\\d{4}(.\\d{2}){2}(\\s|T)(\\d{2}.){2}\\d{2}", s)
+	if err != nil {
+		return false
+	}
+	return v
+}
+
+func validUnixTime(s string) bool {
+	v, err := regexp.MatchString("^\\d+$", s)
+	if err != nil {
+		return false
+	}
+	return v
 }

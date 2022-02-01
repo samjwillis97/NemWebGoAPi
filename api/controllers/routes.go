@@ -11,4 +11,5 @@ func (s *Server) initializeRoutes() {
 
 	dataRouter := s.Router.PathPrefix("/data").Subrouter()
 	dataRouter.HandleFunc("/demand", s.GetDemandData).Methods("GET")
+	dataRouter.HandleFunc("/rooftop", s.GetRooftopData).Methods("GET")
 }
