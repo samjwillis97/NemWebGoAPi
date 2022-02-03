@@ -1,5 +1,7 @@
 # NemWebGoApi
 
+[![Docker](https://github.com/samjwillis97/NemWebGoAPi/actions/workflows/docker-publish.yml/badge.svg?branch=main)](https://github.com/samjwillis97/NemWebGoAPi/actions/workflows/docker-publish.yml)
+
 This is an api for interacting with an SQLite Database and InfluxDB that contains the latest data on generating units reporting to the Naitonal Electricy Market Australia.
 
 ## Endpoints
