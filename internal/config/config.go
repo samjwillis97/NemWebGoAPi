@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 
@@ -16,9 +17,6 @@ type Config struct {
 	influxToken  string
 	influxOrg    string
 	influxBucket string
-	influxUser   string
-	influxPass   string
-	apiPrefix    string
 	apiPort      string
 	logLevel     string
 	testing      bool
@@ -30,8 +28,10 @@ func New() *Config {
 		// path/to/whatever does not exist
 		err = godotenv.Load()
 		if err != nil {
-			log.Fatalf("Error getting env, %v", err)
+			fmt.Printf("Error getting env, %v", err)
+			os.Exit(1)
 		} else {
+			fmt.Println(".env File Read")
 			log.Infoln(".env File Read")
 		}
 	}
@@ -39,13 +39,10 @@ func New() *Config {
 	conf := &Config{}
 
 	conf.sqlitePath = parseEnvString("SQLITE_PATH", "/data/database.sqlite")
-	conf.influxURL = parseEnvString("INFlUX_URL", "http://localhost:8086")
+	conf.influxURL = parseEnvString("INFLUX_URL", "http://localhost:8086")
 	conf.influxToken = parseEnvString("INFLUX_TOKEN", "aaaaaaa")
 	conf.influxOrg = parseEnvString("INFLUX_ORG", "nema")
 	conf.influxBucket = parseEnvString("INFLUX_BUCKET", "nema_bucket")
-	conf.influxUser = parseEnvString("INFLUX_USER", "adminUser")
-	conf.influxPass = parseEnvString("INFLUX_PASS", "adminPass")
-	conf.apiPrefix = parseEnvString("API_PREFIX", "/api")
 	conf.apiPort = parseEnvString("API_PORT", "3005")
 	conf.logLevel = parseEnvString("LOG_LEVEL", "info")
 	conf.testing, _ = strconv.ParseBool(parseEnvString("TESTING", "False"))

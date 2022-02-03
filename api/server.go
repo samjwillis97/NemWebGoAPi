@@ -4,7 +4,6 @@ import (
 	"NemWebGoApi/api/controllers"
 	"NemWebGoApi/internal/config"
 
-	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -12,9 +11,9 @@ var server = controllers.Server{}
 var cfg *config.Config
 
 func Init(testing bool) controllers.Server {
-	if err := godotenv.Load(); err != nil {
-		log.Warnln("Error reading .env file: ", err)
-	}
+	// if err := godotenv.Load(); err != nil {
+	// 	log.Warnln("Error reading .env file: ", err)
+	// }
 
 	cfg = config.New()
 

@@ -91,6 +91,10 @@ func (f *StringFilter) fromFilterMap(filterMap map[string][]string, param string
 	}
 }
 
+func (f *StringFilter) SetEq(v []string) {
+	f.eq = v
+}
+
 func (f *IntFilter) fromFilterMap(filterMap map[string][]string, param string) {
 	if val, ok := filterMap[param+".lt"]; ok {
 		f.lt, _ = strconv.ParseInt(val[0], 10, 64)
@@ -162,8 +166,8 @@ func buildStringFilterFluxStatement(filter StringFilter, fieldName string) (stri
 	if len(filter.eq) != 0 {
 		for ndx, val := range filter.eq {
 			stmt += fmt.Sprintf("\n\t\tr.%s == \"%s\"", fieldName, val)
-			if ndx < len(filter.li)-1 {
-				stmt += "and"
+			if ndx < len(filter.eq)-1 {
+				stmt += " or"
 			}
 		}
 		stmt += "\n\t)"
@@ -171,7 +175,7 @@ func buildStringFilterFluxStatement(filter StringFilter, fieldName string) (stri
 		for ndx, val := range filter.li {
 			stmt += fmt.Sprintf("\n\t\tr.%s =~ /%s/", fieldName, val)
 			if ndx < len(filter.li)-1 {
-				stmt += "and"
+				stmt += " or"
 			}
 		}
 		stmt += "\n\t)"
@@ -200,7 +204,9 @@ func buildInt64FilterSQLStatement(filter IntFilter, colName string) (string, boo
 			}
 			stmt += fmt.Sprintf("%s < %d", colName, filter.lt)
 		}
-		stmt += ")"
+		if filter.gt != -1 || filter.lt != -1 {
+			stmt += ")"
+		}
 	}
 	if stmt == "(" {
 		return "", false
@@ -242,7 +248,7 @@ func buildRangeFilterFluxStatement(filter RangeFilter) (string, bool) {
 		!validUnixTime(filter.stop) {
 		return fmt.Sprintf("\t|> range(start: %s)", filter.start), true
 	}
-	return fmt.Sprintf("\t|> range(start: %s, stop: %s)", filter.start, filter.stop), true
+	return fmt.Sprintf("\t|>range(start: %s, stop: %s)", filter.start, filter.stop), true
 }
 
 // buildSQLQuery takes a struct that consists of filters like StringFilter and IntFilter

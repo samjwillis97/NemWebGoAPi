@@ -20,6 +20,12 @@ type RooftopDataPoint struct {
 	Value    float64   `json:"value"`
 }
 
+type GenerationDataPoint struct {
+	Time  time.Time `json:"time"`
+	Unit  string    `json:"unit"`
+	Value float64   `json:"value"`
+}
+
 type DemandFilter struct {
 	Range     RangeFilter     `col:"range"` // col is unused for range but required for parsing
 	RegionID  StringFilter    `col:"regionId"`
@@ -29,6 +35,12 @@ type DemandFilter struct {
 type RooftopFilter struct {
 	Range     RangeFilter     `col:"range"` // col is unused for range but required for parsing
 	RegionID  StringFilter    `col:"regionId"`
+	Aggregate AggregateFilter `col:"aggregate"` // col is unused for aggregate but required for parsing
+}
+
+type GeneratorFilter struct {
+	Range     RangeFilter     `col:"range"` // col is unused for range but required for parsing
+	DuID      StringFilter    `col:"unit" param:"duid"`
 	Aggregate AggregateFilter `col:"aggregate"` // col is unused for aggregate but required for parsing
 }
 
@@ -72,7 +84,7 @@ func ReadRooftapData(db api.QueryAPI, bucket string, filter RooftopFilter) ([]Ro
 	result, err := db.Query(context.Background(), fluxQuery)
 
 	if err != nil {
-		return []RooftopDataPoint{}, fmt.Errorf("models.ReadDemandData: query error: %v", err)
+		return []RooftopDataPoint{}, fmt.Errorf("models.ReadRooftapData: query error: %v", err)
 	}
 
 	for result.Next() {
@@ -86,37 +98,37 @@ func ReadRooftapData(db api.QueryAPI, bucket string, filter RooftopFilter) ([]Ro
 	}
 
 	if result.Err() != nil {
-		return []RooftopDataPoint{}, fmt.Errorf("models.ReadDemandData: query parsing error: %v", result.Err())
+		return []RooftopDataPoint{}, fmt.Errorf("models.ReadRooftapData: query parsing error: %v", result.Err())
 	}
 
 	return points, nil
 }
 
-func ReadGenerationData(db api.QueryAPI, bucket string, filter DemandFilter) ([]DemandDataPoint, error) {
-	points := make([]DemandDataPoint, 0)
+func ReadGenerationData(db api.QueryAPI, bucket string, filter GeneratorFilter) ([]GenerationDataPoint, error) {
+	points := make([]GenerationDataPoint, 0)
 
 	fluxQuery := fmt.Sprintf("from(bucket: \"%s\")", bucket)
 	fluxQuery += buildFluxQuery(filter)
-	fluxQuery += "\n\t|> filter(fn: (r) => r._measurement == \"demand\")"
+	fluxQuery += "\n\t|> filter(fn: (r) => r._measurement == \"generation\")"
 
 	result, err := db.Query(context.Background(), fluxQuery)
 
 	if err != nil {
-		return []DemandDataPoint{}, fmt.Errorf("models.ReadDemandData: query error: %v", err)
+		return []GenerationDataPoint{}, fmt.Errorf("models.ReadGenerationData: query error: %v", err)
 	}
 
 	for result.Next() {
 		value, _ := getFloatReflectOnly(result.Record().Value())
-		dataPoint := DemandDataPoint{
-			Time:     result.Record().Time(),
-			RegionID: fmt.Sprintf("%v", result.Record().ValueByKey("regionId")),
-			Value:    value,
+		dataPoint := GenerationDataPoint{
+			Time:  result.Record().Time(),
+			Unit:  fmt.Sprintf("%v", result.Record().ValueByKey("unit")),
+			Value: value,
 		}
 		points = append(points, dataPoint)
 	}
 
 	if result.Err() != nil {
-		return []DemandDataPoint{}, fmt.Errorf("models.ReadDemandData: query parsing error: %v", result.Err())
+		return []GenerationDataPoint{}, fmt.Errorf("models.ReadGenerationData: query parsing error: %v", result.Err())
 	}
 
 	return points, nil
@@ -139,6 +151,17 @@ func FilterMaptoRooftopFilter(filterMap map[string][]string) RooftopFilter {
 
 	filter.Range.fromFilterMap(filterMap, "range")
 	filter.RegionID.fromFilterMap(filterMap, "region_id")
+	filter.Aggregate.fromFilterMap(filterMap, "aggregate")
+
+	return filter
+}
+
+func FilterMapToGenerationFilter(filterMap map[string][]string) GeneratorFilter {
+	var filter GeneratorFilter
+	fmt.Println(filterMap)
+
+	filter.Range.fromFilterMap(filterMap, "range")
+	filter.DuID.fromFilterMap(filterMap, "duid")
 	filter.Aggregate.fromFilterMap(filterMap, "aggregate")
 
 	return filter

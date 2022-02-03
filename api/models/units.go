@@ -17,6 +17,7 @@ type Unit struct {
 }
 
 type UnitFilter struct {
+	Duid           StringFilter `col:"duid" param:"duid"`
 	StationName    StringFilter `col:"station_name" param:"station_name"`
 	RegionID       StringFilter `col:"region_id" param:"region_id"`
 	FuelSource     StringFilter `col:"fuel_source" param:"fuel_source"`

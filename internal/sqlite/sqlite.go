@@ -13,7 +13,7 @@ func New(filepath string) *sql.DB {
 	if err != nil {
 		log.Fatalln("Cannot connect to DB: ", err)
 	} else {
-		log.Infof("Successfully connected to DB at %s\n", filepath)
+		log.Infof("Successfully connected to DB at %s", filepath)
 	}
 
 	return db
