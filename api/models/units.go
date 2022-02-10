@@ -17,7 +17,7 @@ type Unit struct {
 }
 
 type UnitFilter struct {
-	Duid           StringFilter `col:"duid" param:"duid"`
+	Duid           StringFilter `col:"unit" param:"unit"`
 	StationName    StringFilter `col:"station_name" param:"station_name"`
 	RegionID       StringFilter `col:"region_id" param:"region_id"`
 	FuelSource     StringFilter `col:"fuel_source" param:"fuel_source"`
@@ -60,6 +60,7 @@ func ParseUnitFilterMap(filterMap map[string][]string) UnitFilter {
 	filter.FuelSource.fromFilterMap(filterMap, "fuel_source")
 	filter.TechnologyType.fromFilterMap(filterMap, "technology_type")
 	filter.MaxCapacity.fromFilterMap(filterMap, "max_capacity")
+	filter.Duid.fromFilterMap(filterMap, "unit")
 
 	return filter
 }
