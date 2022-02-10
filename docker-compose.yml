@@ -1,8 +1,39 @@
 version: "3.7"
 
 services:
+  nemweb-influx:
+    image: influxdb:2.0
+    container_name: influxdb
+    restart: always
+    ports:
+      - "$INFLUX_PORT:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: $INFLUX_USER
+      DOCKER_INFLUXDB_INIT_PASSWORD: $INFLUX_PASS
+      DOCKER_INFLUXDB_INIT_ORG: $INFLUX_ORG
+      DOCKER_INFLUXDB_INIT_BUCKET: $INFLUX_BUCKET
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: $INFLUX_TOKEN
+    volumes:
+      - $HOME/docker/nemweb/influxdb2:/var/lib/influxdb2
+
+  nemweb-scraper:
+    image: ghcr.io/samjwillis97/nemwebscraper:main
+    container_name: nemweb-scraper
+    depends_on:
+      -  influxdb
+    volumes:
+      - $HOME/docker/nemweb/scraper:/data
+      - $HOME/docker/tmp:/tmp
+    environment:
+      DEBUG: $DEBUG
+      INFLUX_ORG: $INFLUX_ORG
+      INFLUX_BUCKET: $INFLUX_BUCKET
+      INFLUX_URL: $INFLUX_URL
+      INFLUX_TOKEN: $INFLUX_TOKEN
+
   nemweb-api:
-    build: .
+    image: ghcr.io/samjwillis97/nemwebgoapi:main
     container_name: nemweb-api
     volumes:
       - $HOME/docker/nemweb/scraper:/data

@@ -37,8 +37,10 @@ func (s *Server) Run(port string) {
 		// AllowedHeaders: []string{"Content-type", "Origin", "Accept", "Access-Control-Allow-Origin"},
 		AllowedOrigins: []string{
 			"http://127.0.0.1:3005",
+			"http://127.0.0.1:3000",
 			"http://127.0.0.1",
 			"http://localhost:3005",
+			"http://localhost:3000",
 			"http://localhost",
 		},
 		AllowCredentials: true,

@@ -14,6 +14,11 @@ type DemandDataPoint struct {
 	Value    float64   `json:"value"`
 }
 
+type DataPoint struct {
+	Time  time.Time `json:"time"`
+	Value float64   `json:"value"`
+}
+
 type RooftopDataPoint struct {
 	Time     time.Time `json:"time"`
 	RegionID string    `json:"region_id"`
@@ -21,9 +26,8 @@ type RooftopDataPoint struct {
 }
 
 type GenerationDataPoint struct {
-	Time  time.Time `json:"time"`
-	Unit  string    `json:"unit"`
-	Value float64   `json:"value"`
+	Unit string      `json:"unit"`
+	Data []DataPoint `json:"data"`
 }
 
 type DemandFilter struct {
@@ -105,7 +109,8 @@ func ReadRooftapData(db api.QueryAPI, bucket string, filter RooftopFilter) ([]Ro
 }
 
 func ReadGenerationData(db api.QueryAPI, bucket string, filter GeneratorFilter) ([]GenerationDataPoint, error) {
-	points := make([]GenerationDataPoint, 0)
+
+	data := make([]GenerationDataPoint, 0)
 
 	fluxQuery := fmt.Sprintf("from(bucket: \"%s\")", bucket)
 	fluxQuery += buildFluxQuery(filter)
@@ -117,21 +122,39 @@ func ReadGenerationData(db api.QueryAPI, bucket string, filter GeneratorFilter) 
 		return []GenerationDataPoint{}, fmt.Errorf("models.ReadGenerationData: query error: %v", err)
 	}
 
+	var units []string
+	var unitMap map[string][]DataPoint
+
 	for result.Next() {
 		value, _ := getFloatReflectOnly(result.Record().Value())
-		dataPoint := GenerationDataPoint{
-			Time:  result.Record().Time(),
-			Unit:  fmt.Sprintf("%v", result.Record().ValueByKey("unit")),
-			Value: value,
+		unitName := fmt.Sprintf("%v", result.Record().ValueByKey("unit"))
+
+		if _, ok := unitMap[unitName]; ok {
+			unitMap[unitName] = append(unitMap[unitName], DataPoint{
+				Time:  result.Record().Time(),
+				Value: value,
+			})
+		} else {
+			units = append(units, unitName)
+			unitMap[unitName] = []DataPoint{{
+				Time:  result.Record().Time(),
+				Value: value,
+			}}
 		}
-		points = append(points, dataPoint)
 	}
 
 	if result.Err() != nil {
 		return []GenerationDataPoint{}, fmt.Errorf("models.ReadGenerationData: query parsing error: %v", result.Err())
 	}
 
-	return points, nil
+	for _, v := range units {
+		data = append(data, GenerationDataPoint{
+			Unit: v,
+			Data: unitMap[v],
+		})
+	}
+
+	return data, nil
 }
 
 func FilterMaptoDemandFilter(filterMap map[string][]string) DemandFilter {
