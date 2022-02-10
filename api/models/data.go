@@ -123,7 +123,7 @@ func ReadGenerationData(db api.QueryAPI, bucket string, filter GeneratorFilter) 
 	}
 
 	var units []string
-	var unitMap map[string][]DataPoint
+	unitMap := make(map[string][]DataPoint)
 
 	for result.Next() {
 		value, _ := getFloatReflectOnly(result.Record().Value())
