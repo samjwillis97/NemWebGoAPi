@@ -95,6 +95,10 @@ func (f *StringFilter) SetEq(v []string) {
 	f.eq = v
 }
 
+func (f *StringFilter) GetEq() []string {
+	return f.eq
+}
+
 func (f *IntFilter) fromFilterMap(filterMap map[string][]string, param string) {
 	if val, ok := filterMap[param+".lt"]; ok {
 		f.lt, _ = strconv.ParseInt(val[0], 10, 64)

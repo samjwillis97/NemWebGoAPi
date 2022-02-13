@@ -54,7 +54,9 @@ func (s *Server) GetGeneratingData(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Warnln(duids)
 
+	// TODO: Think of better method to filter, very confusing already caught me out twice
 	filter := models.FilterMapToGenerationFilter(r.URL.Query())
+	duids = append(duids, filter.DuID.GetEq()[:]...)
 	filter.DuID.SetEq(duids)
 
 	data, err := models.ReadGenerationData(
