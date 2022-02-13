@@ -233,6 +233,7 @@ func buildAggregateFilterFluxStatement(filter AggregateFilter) (string, bool) {
 	everyValid, _ = regexp.MatchString("^((\\d+)(ns|us|ms|s|m|h|d|w|mo|y))+$", filter.every)
 
 	if !everyValid || !fnValid {
+		fmt.Println("Aggregate Filter Incorrect")
 		return "", false
 	}
 
