@@ -43,21 +43,30 @@ func (s *Server) GetRooftopData(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) GetGeneratingData(w http.ResponseWriter, r *http.Request) {
 	unit := models.Unit{}
-	units, err := unit.ReadAll(
-		s.SQLDb,
-		models.ParseUnitFilterMap(r.URL.Query()),
-	)
-
-	duids := []string{}
-	for _, val := range *units {
-		duids = append(duids, val.DuID)
-	}
-	log.Warnln(duids)
 
 	// TODO: Think of better method to filter, very confusing already caught me out twice
+	// Currently if there are no DUID filters given it will then search
 	filter := models.FilterMapToGenerationFilter(r.URL.Query())
-	duids = append(duids, filter.DuID.GetEq()[:]...)
-	filter.DuID.SetEq(duids)
+	if len(filter.DuID.GetEq()) == 0 {
+		units, err := unit.ReadAll(
+			s.SQLDb,
+			models.ParseUnitFilterMap(r.URL.Query()),
+		)
+
+		if err != nil {
+			log.Debugln("Error Reading Units:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		duids := []string{}
+		for _, val := range *units {
+			duids = append(duids, val.DuID)
+		}
+
+		duids = append(duids, filter.DuID.GetEq()[:]...)
+		filter.DuID.SetEq(duids)
+	}
 
 	data, err := models.ReadGenerationData(
 		s.InfluxDB.QueryAPI(s.Config.InfluxOrg()),
