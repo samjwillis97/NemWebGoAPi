@@ -116,6 +116,8 @@ func ReadGenerationData(db api.QueryAPI, bucket string, filter GeneratorFilter) 
 	fluxQuery += buildFluxQuery(filter)
 	fluxQuery += "\n\t|> filter(fn: (r) => r._measurement == \"generation\")"
 
+	fmt.Println(fluxQuery)
+
 	result, err := db.Query(context.Background(), fluxQuery)
 
 	if err != nil {
