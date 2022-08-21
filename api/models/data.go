@@ -2,10 +2,13 @@ package models
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/influxdata/influxdb-client-go/v2/api"
+	log "github.com/sirupsen/logrus"
 )
 
 type DemandDataPoint struct {
@@ -46,6 +49,10 @@ type GeneratorFilter struct {
 	Range     RangeFilter     `col:"range"` // col is unused for range but required for parsing
 	DuID      StringFilter    `col:"unit" param:"duid"`
 	Aggregate AggregateFilter `col:"aggregate"` // col is unused for aggregate but required for parsing
+}
+
+type GeneratorGroupedFilter struct {
+	Group StringFilter `col:"group"`
 }
 
 func ReadDemandData(db api.QueryAPI, bucket string, filter DemandFilter) ([]DemandDataPoint, error) {
@@ -116,7 +123,7 @@ func ReadGenerationData(db api.QueryAPI, bucket string, filter GeneratorFilter) 
 	fluxQuery += buildFluxQuery(filter)
 	fluxQuery += "\n\t|> filter(fn: (r) => r._measurement == \"generation\")"
 
-	fmt.Println(fluxQuery)
+	log.Debugln(fluxQuery)
 
 	result, err := db.Query(context.Background(), fluxQuery)
 
@@ -161,7 +168,7 @@ func ReadGenerationData(db api.QueryAPI, bucket string, filter GeneratorFilter) 
 
 func FilterMaptoDemandFilter(filterMap map[string][]string) DemandFilter {
 	var filter DemandFilter
-	fmt.Println(filterMap)
+	log.Debugln(filterMap)
 
 	filter.Range.fromFilterMap(filterMap, "range")
 	filter.RegionID.fromFilterMap(filterMap, "region_id")
@@ -172,7 +179,7 @@ func FilterMaptoDemandFilter(filterMap map[string][]string) DemandFilter {
 
 func FilterMaptoRooftopFilter(filterMap map[string][]string) RooftopFilter {
 	var filter RooftopFilter
-	fmt.Println(filterMap)
+	log.Debugln(filterMap)
 
 	filter.Range.fromFilterMap(filterMap, "range")
 	filter.RegionID.fromFilterMap(filterMap, "region_id")
@@ -183,11 +190,78 @@ func FilterMaptoRooftopFilter(filterMap map[string][]string) RooftopFilter {
 
 func FilterMapToGenerationFilter(filterMap map[string][]string) GeneratorFilter {
 	var filter GeneratorFilter
-	fmt.Println(filterMap)
+	log.Debugln(filterMap)
 
 	filter.Range.fromFilterMap(filterMap, "range")
 	filter.DuID.fromFilterMap(filterMap, "duid")
 	filter.Aggregate.fromFilterMap(filterMap, "aggregate")
 
 	return filter
+}
+
+func FilterMapToGenerationGroupedFilter(filterMap map[string][]string) GeneratorGroupedFilter {
+	var filter GeneratorGroupedFilter
+	log.Debugln(filterMap)
+
+	filter.Group.fromFilterMap(filterMap, "group")
+
+	return filter
+}
+
+func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB) (map[string][]Unit, error) {
+	var unit *Unit
+
+	groupSet := make(map[string]struct{})
+	groupedUnits := make(map[string][]Unit)
+	groupedFilters := make(map[string]UnitFilter)
+
+	queryFilter := UnitFilter{}
+	queryFilter.MaxCapacity.gt = 0
+
+	allUnits, err := unit.ReadAll(db, ParseUnitFilterMap(make(map[string][]string)))
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("error retrieving units: %v", err))
+	}
+
+	for _, group := range g.Group.GetEq() {
+		if _, ok := groupSet[group]; ok {
+			continue
+		}
+		groupSet[group] = struct{}{}
+
+		switch group {
+		case "region":
+			regions, err := GetUniqueRegions(db)
+			if err != nil {
+				return nil, errors.New(fmt.Sprintf("error retrieving unique regions: %v", err))
+			}
+			if len(groupedUnits) > 0 {
+
+			} else {
+				for _, region := range regions {
+					groupFilter := UnitFilter{}
+					groupFilter.RegionID.eq = []string{region}
+					groupedFilters[region] = groupFilter
+					units := make([]Unit, 0)
+					for _, unit := range *allUnits {
+						if unit.RegionID == region {
+							units = append(units, unit)
+						}
+					}
+					groupedUnits[region] = units
+				}
+			}
+		case "fuel":
+		case "technology":
+		default:
+			return nil, errors.New("unkown grouping")
+		}
+	}
+
+	log.Debugln("Grouped Filters")
+	log.Debugln(groupedFilters)
+	log.Debugln("Grouped Units")
+	log.Debugln(groupedUnits)
+
+	return groupedUnits, nil
 }

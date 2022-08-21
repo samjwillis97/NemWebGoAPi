@@ -50,6 +50,24 @@ func (u *Unit) ReadAll(db *sql.DB, filter UnitFilter) (*[]Unit, error) {
 	return &units, nil
 }
 
+func GetUniqueRegions(db *sql.DB) ([]string, error) {
+	query := "SELECT DISTINCT region_id FROM units"
+	results, err := db.Query(query)
+	if err != nil {
+		return []string{}, fmt.Errorf("models.getUniqueRegions: query error: %v", err)
+	}
+
+	regions := make([]string, 0)
+	for results.Next() {
+		var region string
+		results.Scan(
+			&region,
+		)
+		regions = append(regions, region)
+	}
+	return regions, nil
+}
+
 // Could also maybe use reflect package to clean this
 // Using a pointer to desired filter
 func ParseUnitFilterMap(filterMap map[string][]string) UnitFilter {

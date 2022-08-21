@@ -77,6 +77,7 @@ var aggregateFunctions = []string{
 	"unique",
 }
 
+// will convert the query parameter to a StringFilter, looking for the given param
 func (f *StringFilter) fromFilterMap(filterMap map[string][]string, param string) {
 	if val, ok := filterMap[param+".eq"]; ok {
 		f.eq = val

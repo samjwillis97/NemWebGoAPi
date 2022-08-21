@@ -28,5 +28,6 @@ func Init(testing bool) controllers.Server {
 }
 
 func Run(testing bool) {
+	log.Infoln("Server starting")
 	server.Run(":" + cfg.Port())
 }

@@ -83,3 +83,24 @@ func (s *Server) GetGeneratingData(w http.ResponseWriter, r *http.Request) {
 	s.respond(w, r, data, http.StatusOK)
 	return
 }
+
+func (s *Server) GetGenerationDataGrouped(w http.ResponseWriter, r *http.Request) {
+	filter := models.FilterMapToGenerationGroupedFilter(r.URL.Query())
+
+	units, err := filter.GetAllGroupUnitCombinations(s.SQLDb)
+	if err != nil {
+		log.Debugln("Error Getting Grouped Generation Data:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	log.Debugln("Units:")
+	log.Debugln(units)
+
+	// Need to get all the combinations of groups
+
+	data := ""
+
+	s.respond(w, r, data, http.StatusOK)
+	return
+}
