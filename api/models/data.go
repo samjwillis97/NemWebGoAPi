@@ -215,10 +215,7 @@ func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB) (map[st
 	groupedUnits := make(map[string][]Unit)
 	groupedFilters := make(map[string]UnitFilter)
 
-	queryFilter := UnitFilter{}
-	queryFilter.MaxCapacity.gt = 0
-
-	allUnits, err := unit.ReadAll(db, ParseUnitFilterMap(make(map[string][]string)))
+	allUnits, err := unit.ReadAll(db, UnitFilter{})
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("error retrieving units: %v", err))
 	}
@@ -235,7 +232,10 @@ func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB) (map[st
 			if err != nil {
 				return nil, errors.New(fmt.Sprintf("error retrieving unique regions: %v", err))
 			}
-			if len(groupedUnits) > 0 {
+			if len(groupedUnits) > 0 && len(groupedFitlers) > 0 {
+				// Need to Create a New Filter for Each Region to append to the already existing filters
+				for _, filter := range groupedFilters {
+				}
 
 			} else {
 				for _, region := range regions {
