@@ -226,21 +226,49 @@ func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB) (map[st
 		}
 		groupSet[group] = struct{}{}
 
+		// Need to Create a New Filter for Each Region to append to the already existing filters
 		switch group {
 		case "region":
 			regions, err := GetUniqueRegions(db)
 			if err != nil {
 				return nil, errors.New(fmt.Sprintf("error retrieving unique regions: %v", err))
 			}
-			if len(groupedUnits) > 0 && len(groupedFitlers) > 0 {
-				// Need to Create a New Filter for Each Region to append to the already existing filters
-				for _, filter := range groupedFilters {
-				}
+			if len(groupedUnits) > 0 && len(groupedFilters) > 0 {
+				newFilters := make(map[string]UnitFilter)
+				newUnits := make(map[string][]Unit)
 
+				for filterName, filter := range groupedFilters {
+					filterUnits := groupedUnits[filterName]
+					for _, region := range regions {
+						filterName := filterName + "+" + region
+						filter.RegionID.eq = []string{region}
+						filter.MaxCapacity = IntFilter{
+							lt: -1,
+							gt: -1,
+							eq: -1,
+						}
+						newFilters[filterName] = filter
+
+						units := make([]Unit, 0)
+						for _, unit := range filterUnits {
+							if unit.RegionID == region {
+								units = append(units, unit)
+							}
+						}
+						newUnits[filterName] = units
+					}
+				}
+				groupedFilters = newFilters
+				groupedUnits = newUnits
 			} else {
 				for _, region := range regions {
 					groupFilter := UnitFilter{}
 					groupFilter.RegionID.eq = []string{region}
+					groupFilter.MaxCapacity = IntFilter{
+						lt: -1,
+						gt: -1,
+						eq: -1,
+					}
 					groupedFilters[region] = groupFilter
 					units := make([]Unit, 0)
 					for _, unit := range *allUnits {
@@ -252,15 +280,113 @@ func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB) (map[st
 				}
 			}
 		case "fuel":
+			fuels, err := GetUniqueFuels(db)
+			if err != nil {
+				return nil, errors.New(fmt.Sprintf("error retrieving unique fuels: %v", err))
+			}
+			if len(groupedUnits) > 0 && len(groupedFilters) > 0 {
+				newFilters := make(map[string]UnitFilter)
+				newUnits := make(map[string][]Unit)
+
+				for filterName, filter := range groupedFilters {
+					filterUnits := groupedUnits[filterName]
+					for _, fuel := range fuels {
+						filterName := filterName + "+" + fuel
+						filter.FuelSource.eq = []string{fuel}
+						filter.MaxCapacity = IntFilter{
+							lt: -1,
+							gt: -1,
+							eq: -1,
+						}
+						newFilters[filterName] = filter
+
+						units := make([]Unit, 0)
+						for _, unit := range filterUnits {
+							if unit.FuelSource == fuel {
+								units = append(units, unit)
+							}
+						}
+						newUnits[filterName] = units
+					}
+				}
+				groupedFilters = newFilters
+				groupedUnits = newUnits
+			} else {
+				for _, fuel := range fuels {
+					groupFilter := UnitFilter{}
+					groupFilter.FuelSource.eq = []string{fuel}
+					groupFilter.MaxCapacity = IntFilter{
+						lt: -1,
+						gt: -1,
+						eq: -1,
+					}
+					groupedFilters[fuel] = groupFilter
+					units := make([]Unit, 0)
+					for _, unit := range *allUnits {
+						if unit.FuelSource == fuel {
+							units = append(units, unit)
+						}
+					}
+					groupedUnits[fuel] = units
+				}
+			}
 		case "technology":
+			techs, err := GetUniqueTechnologies(db)
+			if err != nil {
+				return nil, errors.New(fmt.Sprintf("error retrieving unique techs: %v", err))
+			}
+			if len(groupedUnits) > 0 && len(groupedFilters) > 0 {
+				newFilters := make(map[string]UnitFilter)
+				newUnits := make(map[string][]Unit)
+
+				for filterName, filter := range groupedFilters {
+					filterUnits := groupedUnits[filterName]
+					for _, tech := range techs {
+						filterName := filterName + "+" + tech
+						filter.TechnologyType.eq = []string{tech}
+						filter.MaxCapacity = IntFilter{
+							lt: -1,
+							gt: -1,
+							eq: -1,
+						}
+						newFilters[filterName] = filter
+
+						units := make([]Unit, 0)
+						for _, unit := range filterUnits {
+							if unit.TechnologyType == tech {
+								units = append(units, unit)
+							}
+						}
+						newUnits[filterName] = units
+					}
+				}
+				groupedFilters = newFilters
+				groupedUnits = newUnits
+			} else {
+				for _, tech := range techs {
+					groupFilter := UnitFilter{}
+					groupFilter.TechnologyType.eq = []string{tech}
+					groupFilter.MaxCapacity = IntFilter{
+						lt: -1,
+						gt: -1,
+						eq: -1,
+					}
+					groupedFilters[tech] = groupFilter
+					units := make([]Unit, 0)
+					for _, unit := range *allUnits {
+						if unit.TechnologyType == tech {
+							units = append(units, unit)
+						}
+					}
+					groupedUnits[tech] = units
+				}
+			}
 		default:
 			return nil, errors.New("unkown grouping")
 		}
 	}
 
-	log.Debugln("Grouped Filters")
 	log.Debugln(groupedFilters)
-	log.Debugln("Grouped Units")
 	log.Debugln(groupedUnits)
 
 	return groupedUnits, nil

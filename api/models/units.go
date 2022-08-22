@@ -68,6 +68,42 @@ func GetUniqueRegions(db *sql.DB) ([]string, error) {
 	return regions, nil
 }
 
+func GetUniqueFuels(db *sql.DB) ([]string, error) {
+	query := "SELECT DISTINCT fuel_source FROM units"
+	results, err := db.Query(query)
+	if err != nil {
+		return []string{}, fmt.Errorf("models.getUniqueFuels: query error: %v", err)
+	}
+
+	fuels := make([]string, 0)
+	for results.Next() {
+		var fuel string
+		results.Scan(
+			&fuel,
+		)
+		fuels = append(fuels, fuel)
+	}
+	return fuels, nil
+}
+
+func GetUniqueTechnologies(db *sql.DB) ([]string, error) {
+	query := "SELECT DISTINCT technology_type FROM units"
+	results, err := db.Query(query)
+	if err != nil {
+		return []string{}, fmt.Errorf("models.getUniqueTechnologies: query error: %v", err)
+	}
+
+	technologies := make([]string, 0)
+	for results.Next() {
+		var technology string
+		results.Scan(
+			&technology,
+		)
+		technologies = append(technologies, technology)
+	}
+	return technologies, nil
+}
+
 // Could also maybe use reflect package to clean this
 // Using a pointer to desired filter
 func ParseUnitFilterMap(filterMap map[string][]string) UnitFilter {
