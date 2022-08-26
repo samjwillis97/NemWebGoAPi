@@ -52,7 +52,9 @@ type GeneratorFilter struct {
 }
 
 type GeneratorGroupedFilter struct {
-	Group StringFilter `col:"group"`
+	Range     RangeFilter `col:"range"` // col is unused for range but required for parsing
+	Group     StringFilter
+	Aggregate AggregateFilter `col:"aggregate"` // col is unused for aggregate but required for parsing
 }
 
 func ReadDemandData(db api.QueryAPI, bucket string, filter DemandFilter) ([]DemandDataPoint, error) {
@@ -116,14 +118,11 @@ func ReadRooftapData(db api.QueryAPI, bucket string, filter RooftopFilter) ([]Ro
 }
 
 func ReadGenerationData(db api.QueryAPI, bucket string, filter GeneratorFilter) ([]GenerationDataPoint, error) {
-
 	data := make([]GenerationDataPoint, 0)
 
 	fluxQuery := fmt.Sprintf("from(bucket: \"%s\")", bucket)
 	fluxQuery += buildFluxQuery(filter)
 	fluxQuery += "\n\t|> filter(fn: (r) => r._measurement == \"generation\")"
-
-	log.Debugln(fluxQuery)
 
 	result, err := db.Query(context.Background(), fluxQuery)
 
@@ -154,6 +153,74 @@ func ReadGenerationData(db api.QueryAPI, bucket string, filter GeneratorFilter) 
 
 	if result.Err() != nil {
 		return []GenerationDataPoint{}, fmt.Errorf("models.ReadGenerationData: query parsing error: %v", result.Err())
+	}
+
+	for _, v := range units {
+		data = append(data, GenerationDataPoint{
+			Unit: v,
+			Data: unitMap[v],
+		})
+	}
+
+	return data, nil
+}
+
+func ReadGroupedGenerationData(db api.QueryAPI, bucket string, baseFilter GeneratorGroupedFilter, groups map[string][]Unit) ([]GenerationDataPoint, error) {
+	fluxQuery := ""
+	for name, group := range groups {
+		if len(group) == 0 {
+			continue
+		}
+		newQuery := fmt.Sprintf("from(bucket: \"%s\")", bucket)
+		newQuery += buildFluxQuery(baseFilter)
+		newQuery += "\n\t|> filter(fn: (r) => r._measurement == \"generation\")"
+		newQuery += "\n\t|> filter(fn: (r) => r[\"unit\"] == "
+		i := 0
+		for _, unit := range group {
+			if i > 0 {
+				newQuery += fmt.Sprintf(" or r[\"unit\"] == ")
+			}
+			newQuery += fmt.Sprintf("\"%s\"", unit.DuID)
+			i++
+		}
+		newQuery += ")"
+		newQuery += "\n\t|> group(columns: [\"_time\", \"_measurement\"])"
+		newQuery += "\n\t|> sum(column: \"_value\")"
+		newQuery += "\n\t|> group(columns: [\"_measurement\"])"
+		newQuery += fmt.Sprintf("\n\t|> yield(name: \"%s\")", name)
+		fluxQuery += newQuery + "\n"
+	}
+
+	result, err := db.Query(context.Background(), fluxQuery)
+
+	if err != nil {
+		return []GenerationDataPoint{}, fmt.Errorf("models.ReadGroupedGenerationData: query error: %v", err)
+	}
+
+	var units []string
+	data := make([]GenerationDataPoint, 0)
+	unitMap := make(map[string][]DataPoint)
+
+	for result.Next() {
+		value, _ := getFloatReflectOnly(result.Record().Value())
+        unitName := result.TableMetadata().Column(0).DefaultValue()
+
+		if _, ok := unitMap[unitName]; ok {
+			unitMap[unitName] = append(unitMap[unitName], DataPoint{
+				Time:  result.Record().Time(),
+				Value: value,
+			})
+		} else {
+			units = append(units, unitName)
+			unitMap[unitName] = []DataPoint{{
+				Time:  result.Record().Time(),
+				Value: value,
+			}}
+		}
+	}
+
+	if result.Err() != nil {
+		return []GenerationDataPoint{}, fmt.Errorf("models.ReadGroupedGenerationData: query parsing error: %v", result.Err())
 	}
 
 	for _, v := range units {
@@ -203,21 +270,28 @@ func FilterMapToGenerationGroupedFilter(filterMap map[string][]string) Generator
 	var filter GeneratorGroupedFilter
 	log.Debugln(filterMap)
 
+	filter.Range.fromFilterMap(filterMap, "range")
 	filter.Group.fromFilterMap(filterMap, "group")
+	filter.Aggregate.fromFilterMap(filterMap, "aggregate")
 
 	return filter
 }
 
-func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB) (map[string][]Unit, error) {
+func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB) (map[string][]Unit, map[string]UnitFilter, error) {
 	var unit *Unit
 
 	groupSet := make(map[string]struct{})
 	groupedUnits := make(map[string][]Unit)
 	groupedFilters := make(map[string]UnitFilter)
 
-	allUnits, err := unit.ReadAll(db, UnitFilter{})
+	baseFilter := UnitFilter{}
+	baseFilter.MaxCapacity.eq = -1
+	baseFilter.MaxCapacity.lt = -1
+	baseFilter.MaxCapacity.gt = -1
+
+	allUnits, err := unit.ReadAll(db, baseFilter)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("error retrieving units: %v", err))
+		return nil, nil, errors.New(fmt.Sprintf("error retrieving units: %v", err))
 	}
 
 	for _, group := range g.Group.GetEq() {
@@ -231,7 +305,7 @@ func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB) (map[st
 		case "region":
 			regions, err := GetUniqueRegions(db)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("error retrieving unique regions: %v", err))
+				return nil, nil, errors.New(fmt.Sprintf("error retrieving unique regions: %v", err))
 			}
 			if len(groupedUnits) > 0 && len(groupedFilters) > 0 {
 				newFilters := make(map[string]UnitFilter)
@@ -282,7 +356,7 @@ func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB) (map[st
 		case "fuel":
 			fuels, err := GetUniqueFuels(db)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("error retrieving unique fuels: %v", err))
+				return nil, nil, errors.New(fmt.Sprintf("error retrieving unique fuels: %v", err))
 			}
 			if len(groupedUnits) > 0 && len(groupedFilters) > 0 {
 				newFilters := make(map[string]UnitFilter)
@@ -333,7 +407,7 @@ func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB) (map[st
 		case "technology":
 			techs, err := GetUniqueTechnologies(db)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("error retrieving unique techs: %v", err))
+				return nil, nil, errors.New(fmt.Sprintf("error retrieving unique techs: %v", err))
 			}
 			if len(groupedUnits) > 0 && len(groupedFilters) > 0 {
 				newFilters := make(map[string]UnitFilter)
@@ -382,12 +456,9 @@ func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB) (map[st
 				}
 			}
 		default:
-			return nil, errors.New("unkown grouping")
+			return nil, nil, errors.New("unkown grouping")
 		}
 	}
 
-	log.Debugln(groupedFilters)
-	log.Debugln(groupedUnits)
-
-	return groupedUnits, nil
+	return groupedUnits, groupedFilters, nil
 }

@@ -87,19 +87,25 @@ func (s *Server) GetGeneratingData(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetGenerationDataGrouped(w http.ResponseWriter, r *http.Request) {
 	filter := models.FilterMapToGenerationGroupedFilter(r.URL.Query())
 
-	_, err := filter.GetAllGroupUnitCombinations(s.SQLDb)
+	units, _, err := filter.GetAllGroupUnitCombinations(s.SQLDb)
 	if err != nil {
 		log.Debugln("Error Getting Grouped Generation Data:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	// log.Debugln("Units:")
-	// log.Debugln(units)
+	data, err := models.ReadGroupedGenerationData(
+		s.InfluxDB.QueryAPI(s.Config.InfluxOrg()),
+		s.Config.InfluxBucket(),
+		filter,
+		units,
+	)
 
-	// Need to get all the combinations of groups
-
-	data := ""
+	if err != nil {
+		log.Debugln("Error Getting Grouped Generation Data:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	s.respond(w, r, data, http.StatusOK)
 	return
