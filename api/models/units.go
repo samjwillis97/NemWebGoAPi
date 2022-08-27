@@ -3,6 +3,7 @@ package models
 import (
 	"database/sql"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 )
 
 // Unit is the structure of the unit table in the sqlite database
@@ -29,6 +30,7 @@ type UnitFilter struct {
 func (u *Unit) ReadAll(db *sql.DB, filter UnitFilter) (*[]Unit, error) {
 	query := "SELECT duid, station_name, region_id, fuel_source, technology_type, max_capacity FROM units"
 	query += buildSQLQuery(filter)
+    log.Traceln(query)
 	results, err := db.Query(query)
 	if err != nil {
 		return &[]Unit{}, fmt.Errorf("models.unit.readall: query error: %v", err)

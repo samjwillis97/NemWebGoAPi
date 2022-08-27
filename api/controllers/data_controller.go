@@ -87,7 +87,7 @@ func (s *Server) GetGeneratingData(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetGenerationDataGrouped(w http.ResponseWriter, r *http.Request) {
 	filter := models.FilterMapToGenerationGroupedFilter(r.URL.Query())
 
-	units, _, err := filter.GetAllGroupUnitCombinations(s.SQLDb)
+	units, _, err := filter.GetAllGroupUnitCombinations(s.SQLDb, r.URL.Query())
 	if err != nil {
 		log.Debugln("Error Getting Grouped Generation Data:", err)
 		w.WriteHeader(http.StatusInternalServerError)

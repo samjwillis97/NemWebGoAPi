@@ -55,6 +55,9 @@ type GeneratorGroupedFilter struct {
 	Range     RangeFilter `col:"range"` // col is unused for range but required for parsing
 	Group     StringFilter
 	Aggregate AggregateFilter `col:"aggregate"` // col is unused for aggregate but required for parsing
+    RegionID StringFilter `col:"region_id"`
+    FuelSource StringFilter `col:"fuel_source"`
+    TechnologyType StringFilter `col:"technology_type"`
 }
 
 func ReadDemandData(db api.QueryAPI, bucket string, filter DemandFilter) ([]DemandDataPoint, error) {
@@ -277,17 +280,14 @@ func FilterMapToGenerationGroupedFilter(filterMap map[string][]string) Generator
 	return filter
 }
 
-func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB) (map[string][]Unit, map[string]UnitFilter, error) {
+func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB, queryFilter map[string][]string) (map[string][]Unit, map[string]UnitFilter, error) {
 	var unit *Unit
 
 	groupSet := make(map[string]struct{})
 	groupedUnits := make(map[string][]Unit)
 	groupedFilters := make(map[string]UnitFilter)
 
-	baseFilter := UnitFilter{}
-	baseFilter.MaxCapacity.eq = -1
-	baseFilter.MaxCapacity.lt = -1
-	baseFilter.MaxCapacity.gt = -1
+    baseFilter := ParseUnitFilterMap(queryFilter)
 
 	allUnits, err := unit.ReadAll(db, baseFilter)
 	if err != nil {
