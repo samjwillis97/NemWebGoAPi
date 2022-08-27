@@ -46,18 +46,21 @@ type RooftopFilter struct {
 }
 
 type GeneratorFilter struct {
-	Range     RangeFilter     `col:"range"` // col is unused for range but required for parsing
-	DuID      StringFilter    `col:"unit" param:"duid"`
-	Aggregate AggregateFilter `col:"aggregate"` // col is unused for aggregate but required for parsing
+	Range          RangeFilter     `col:"range"` // col is unused for range but required for parsing
+	DuID           StringFilter    `col:"unit" param:"duid"`
+	Aggregate      AggregateFilter `col:"aggregate"` // col is unused for aggregate but required for parsing
+	RegionID       StringFilter    `col:"region_id"`
+	FuelSource     StringFilter    `col:"fuel_source"`
+	TechnologyType StringFilter    `col:"technology_type"`
 }
 
 type GeneratorGroupedFilter struct {
-	Range     RangeFilter `col:"range"` // col is unused for range but required for parsing
-	Group     StringFilter
-	Aggregate AggregateFilter `col:"aggregate"` // col is unused for aggregate but required for parsing
-    RegionID StringFilter `col:"region_id"`
-    FuelSource StringFilter `col:"fuel_source"`
-    TechnologyType StringFilter `col:"technology_type"`
+	Range          RangeFilter `col:"range"` // col is unused for range but required for parsing
+	Group          StringFilter
+	Aggregate      AggregateFilter `col:"aggregate"` // col is unused for aggregate but required for parsing
+	RegionID       StringFilter    `col:"region_id"`
+	FuelSource     StringFilter    `col:"fuel_source"`
+	TechnologyType StringFilter    `col:"technology_type"`
 }
 
 func ReadDemandData(db api.QueryAPI, bucket string, filter DemandFilter) ([]DemandDataPoint, error) {
@@ -194,6 +197,12 @@ func ReadGroupedGenerationData(db api.QueryAPI, bucket string, baseFilter Genera
 		fluxQuery += newQuery + "\n"
 	}
 
+	if fluxQuery == "" {
+		return []GenerationDataPoint{}, fmt.Errorf("models.ReadGroupedGenerationData: query error: flux query empty, no groups")
+	}
+
+	log.Traceln(fluxQuery)
+
 	result, err := db.Query(context.Background(), fluxQuery)
 
 	if err != nil {
@@ -206,7 +215,7 @@ func ReadGroupedGenerationData(db api.QueryAPI, bucket string, baseFilter Genera
 
 	for result.Next() {
 		value, _ := getFloatReflectOnly(result.Record().Value())
-        unitName := result.TableMetadata().Column(0).DefaultValue()
+		unitName := result.TableMetadata().Column(0).DefaultValue()
 
 		if _, ok := unitMap[unitName]; ok {
 			unitMap[unitName] = append(unitMap[unitName], DataPoint{
@@ -281,13 +290,18 @@ func FilterMapToGenerationGroupedFilter(filterMap map[string][]string) Generator
 }
 
 func (g *GeneratorGroupedFilter) GetAllGroupUnitCombinations(db *sql.DB, queryFilter map[string][]string) (map[string][]Unit, map[string]UnitFilter, error) {
+
+	if len(g.Group.GetEq()) == 0 {
+		return nil, nil, errors.New(fmt.Sprintf("error getAllGroupUnitCombinations: no groups given"))
+	}
+
 	var unit *Unit
 
 	groupSet := make(map[string]struct{})
 	groupedUnits := make(map[string][]Unit)
 	groupedFilters := make(map[string]UnitFilter)
 
-    baseFilter := ParseUnitFilterMap(queryFilter)
+	baseFilter := ParseUnitFilterMap(queryFilter)
 
 	allUnits, err := unit.ReadAll(db, baseFilter)
 	if err != nil {
